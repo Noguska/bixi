@@ -1,0 +1,24 @@
+Bixi
+Copyright 2026 Noguska LLC
+
+This product is licensed under the Apache License, Version 2.0, with the
+Commons Clause License Condition v1.0 (see the LICENSE file). In short: you may
+use, modify, fork, and distribute this software freely, including within a
+commercial organization, but you may not Sell it (as defined in the Commons
+Clause). All other rights are reserved by the Licensor.
+
+-----------------------------------------------------------------------------
+Third-party components, distributed under their own licenses:
+
+  * Inter (typeface) — SIL Open Font License 1.1
+        assets/vendor/fonts/inter-latin-var.woff2
+        License: assets/vendor/fonts/Inter-OFL.txt
+
+  * IBM Plex Sans & IBM Plex Mono (typefaces) — SIL Open Font License 1.1
+        assets/vendor/fonts/ibm-plex-sans-latin-*.woff2
+        assets/vendor/fonts/ibm-plex-mono-latin-*.woff2
+        License: assets/vendor/fonts/IBM-Plex-OFL.txt
+
+  * highlight.js — BSD 3-Clause License
+        assets/vendor/highlight.min.js
+        License: assets/vendor/highlight.LICENSE

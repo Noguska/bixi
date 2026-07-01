@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+  <!-- Bixi dashboard backdrop: a dark, faded shan-shui (ink-wash) scene —
+       layered misty mountains, drifting clouds, a pagoda + pines on a ridge, and
+       the dragon-tortoise gliding slowly across the sky on a gentle arc. Colours
+       sit close to the app background (#0d0e11) so it reads as quiet texture.
+       The MOON is drawn separately by the app (real phase, by date), not here.
+       Self-contained; motion via SMIL so it animates as a CSS background-image. -->
+  <defs>
+    <linearGradient id="bixi-sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"  stop-color="#12161d"/>
+      <stop offset="100%" stop-color="#0d0e11"/>
+    </linearGradient>
+    <linearGradient id="bixi-mist" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0"   stop-color="#9fb4c4" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#9fb4c4" stop-opacity="0.055"/>
+      <stop offset="1"   stop-color="#9fb4c4" stop-opacity="0"/>
+    </linearGradient>
+    <!-- calm moonlit water in the foreground -->
+    <linearGradient id="bixi-water" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8aa0b4" stop-opacity="0"/>
+      <stop offset="1" stop-color="#8aa0b4" stop-opacity="0.06"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="0" y="0" width="1440" height="900" fill="url(#bixi-sky)"/>
+
+  <!-- drifting clouds (faint mist wisps; gentle ease-in-out sway) -->
+  <g opacity="0.05" fill="#9fb4c4">
+    <g transform="translate(300 230)">
+      <animateTransform attributeName="transform" type="translate" values="-24 0;24 0;-24 0"
+        dur="57s" calcMode="spline" keyTimes="0;0.5;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1" repeatCount="indefinite"/>
+      <path d="M-130 8 q26 -20 60 -10 q22 -22 62 -10 q32 -8 52 8 q26 0 14 18 q-84 11 -188 4 q-28 -8 -2 -22 Z"/>
+    </g>
+    <g transform="translate(880 320)">
+      <animateTransform attributeName="transform" type="translate" values="20 0;-20 0;20 0"
+        dur="73s" calcMode="spline" keyTimes="0;0.5;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1" repeatCount="indefinite"/>
+      <path d="M-110 6 q22 -17 52 -9 q20 -19 54 -9 q28 -7 44 7 q22 0 12 16 q-72 9 -162 3 q-24 -7 -2 -19 Z"/>
+    </g>
+    <g transform="translate(150 430)" opacity="0.7">
+      <animateTransform attributeName="transform" type="translate" values="-16 0;16 0;-16 0"
+        dur="64s" calcMode="spline" keyTimes="0;0.5;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1" repeatCount="indefinite"/>
+      <path d="M-90 5 q18 -14 42 -7 q16 -16 44 -7 q24 -6 36 6 q18 0 10 13 q-58 8 -132 3 q-20 -6 -2 -16 Z"/>
+    </g>
+  </g>
+
+  <!-- (the Bixi is drawn lower down, ambling along the foreground ridge) -->
+
+  <!-- ===== layered ranges (far → near), dark & hazy, with mist between ===== -->
+  <path d="M0 560 L60 488 L88 556 L138 452 L182 556 C250 540 300 486 372 512 C460 542 540 492 628 516 C730 543 820 494 916 518 C1030 545 1112 498 1216 520 C1310 540 1372 512 1440 526 L1440 900 L0 900 Z" fill="#1b2433"/>
+  <path d="M0 612 C120 610 210 566 316 592 C402 612 470 568 566 590 L604 566 L640 596 C742 618 836 574 940 596 C1052 620 1140 576 1252 598 C1340 615 1392 592 1440 606 L1440 900 L0 900 Z" fill="#141c28"/>
+  <rect x="0" y="556" width="1440" height="110" fill="url(#bixi-mist)"/>
+
+  <!-- the Bixi (dragon-tortoise) ambling slowly along behind the pine ridge; the
+       next range is drawn on top, so it's clipped — only the shell and dragon
+       head crest the ridgeline now and then as it walks. -->
+  <!-- Easter egg (id used by the app to gate on moon phase): the Bixi only
+       exists in the scene under a full moon. When present it stays parked
+       off-screen for 9999s (~2h46m, "four nines" — the dragon number), then
+       makes one slow ~110s crossing, then hides again. Period = 10109s; the
+       wait ends at 9999/10109 = 0.98912 of the cycle. -->
+  <g id="bixi-egg">
+    <animateTransform attributeName="transform" type="translate"
+      values="-200 716;-200 716;1640 716" keyTimes="0;0.98912;1"
+      dur="10109s" repeatCount="indefinite"/>
+    <g transform="scale(0.55)" fill="#f5b13d" opacity="0.22">
+      <path d="M-72 8 C-72 -56 -28 -78 4 -78 C44 -78 74 -52 74 8 Z"/>
+      <path d="M-80 6 Q-2 26 80 6 L74 8 Q-2 18 -74 8 Z"/>
+      <path d="M-60 2 H66 V24 H-60 Z"/>
+      <path d="M40 6 H56 V44 H40 Z"/><path d="M34 42 H60 L56 52 L47 48 L38 52 Z"/>
+      <path d="M16 8 H30 V46 H16 Z"/><path d="M10 44 H34 L30 54 L21 50 L12 54 Z"/>
+      <path d="M-36 6 H-22 V44 H-36 Z"/><path d="M-42 42 H-16 L-20 52 L-29 48 L-38 52 Z"/>
+      <path d="M-58 8 H-46 V44 H-58 Z"/><path d="M-64 42 H-40 L-44 52 L-53 48 L-62 52 Z"/>
+      <path d="M50 -40 C72 -46 86 -58 92 -78 C97 -94 108 -103 122 -104 L130 -88 C116 -85 104 -77 98 -62 C92 -49 74 -40 58 -36 Z"/>
+      <!-- Chinese dragon head: compact, short snout w/ a small maw, swept-back horn -->
+      <path d="M104 -94 C110 -103 122 -107 132 -103 C142 -99 150 -96 154 -90 C150 -86 142 -85 135 -86 C140 -82 134 -76 124 -78 C115 -80 103 -85 104 -94 Z"/>
+      <path d="M112 -100 C110 -114 103 -123 95 -124 C99 -117 104 -109 109 -99 Z"/>
+      <path d="M-72 -2 C-94 -2 -108 -16 -104 -32 C-100 -42 -88 -40 -88 -28 C-88 -16 -82 -10 -68 -10 Z"/>
+    </g>
+  </g>
+
+  <path d="M0 700 C150 684 250 648 372 670 C474 688 556 652 676 672 C772 688 840 660 916 650 L968 636 L1004 644 C1086 660 1190 666 1306 654 C1364 648 1404 664 1440 668 L1440 900 L0 900 Z" fill="#0f1620"/>
+
+  <!-- pagoda (tiered, upturned eaves) — faint moonlit stone -->
+  <g fill="#2f3a49" opacity="0.6">
+    <path d="M977 620 H995 V636 H977 Z"/>
+    <path d="M970 620 Q986 607 1002 620 Q996 614 986 615 Q976 614 970 620 Z"/>
+    <path d="M979 608 H993 V620 H979 Z"/>
+    <path d="M973 608 Q986 597 999 608 Q994 603 986 604 Q978 603 973 608 Z"/>
+    <path d="M981 598 H991 V608 H981 Z"/>
+    <path d="M976 598 Q986 590 996 598 Q992 594 986 595 Q980 594 976 598 Z"/>
+    <path d="M985 587 H987 V595 H985 Z"/>
+  </g>
+  <g fill="none" stroke="#2b3543" stroke-opacity="0.55" stroke-width="1" stroke-linecap="round">
+    <path d="M1024 656 V634 M1015 641 Q1024 632 1033 641 M1017 647 Q1024 641 1031 647 M1019 652 Q1024 647 1029 652"/>
+    <path d="M952 652 V632 M944 639 Q952 631 960 639 M946 645 Q952 640 958 645"/>
+  </g>
+
+  <rect x="0" y="612" width="1440" height="110" fill="url(#bixi-mist)"/>
+
+  <path d="M0 778 C190 760 332 726 492 752 C634 774 734 736 876 758 C1018 778 1138 742 1298 760 C1372 768 1414 758 1440 766 L1440 900 L0 900 Z" fill="#090d13"/>
+  <rect x="0" y="716" width="1440" height="96" fill="url(#bixi-mist)"/>
+
+  <!-- ===== calm water + a lone fisherman (with reflection) ===== -->
+  <rect x="0" y="812" width="1440" height="88" fill="url(#bixi-water)"/>
+  <!-- a soft moonlit sheen line on the water -->
+  <path d="M120 836 H1320" stroke="#9fb4c4" stroke-opacity="0.05" stroke-width="2"/>
+  <g transform="translate(470 842)">
+    <!-- reflection: flipped, faded, squashed, broken by a couple of ripple gaps -->
+    <g transform="scale(1 -0.7)" fill="#aeb9c6" opacity="0.13">
+      <path d="M-26 0 Q0 9 26 0 Q20 5 0 6 Q-20 5 -26 0 Z"/>
+      <path d="M-2 -3 L-4 -16 L1 -18 L5 -16 L3 -3 Z"/>
+      <path d="M-6 -15 Q0 -21 8 -15 Q1 -18 -6 -15 Z"/>
+    </g>
+    <!-- ripple gaps over the reflection (water colour) -->
+    <path d="M-30 5 H30 M-30 11 H30" stroke="#0c1018" stroke-opacity="0.6" stroke-width="2"/>
+    <!-- boat + standing fisherman with oar -->
+    <g fill="#aeb9c6" opacity="0.4">
+      <path d="M-26 0 Q0 9 26 0 Q20 5 0 6 Q-20 5 -26 0 Z"/>
+      <path d="M-2 0 L-4 -16 L1 -18 L5 -16 L3 0 Z"/>
+      <path d="M-6 -16 Q0 -22 8 -16 Q1 -19 -6 -16 Z"/>
+    </g>
+    <path d="M2 -9 L-18 2" stroke="#aeb9c6" stroke-opacity="0.4" stroke-width="1.6" stroke-linecap="round"/>
+  </g>
+</svg>

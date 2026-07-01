@@ -1,0 +1,24 @@
+# ── SVN Review — files kept OUT of the public repository ─────────────────
+
+# Per-install state: machine-/customer-specific runtime data
+# (SVN credentials, registered project paths, review state, caches, sessions).
+# The app ships with an EMPTY data/ and recreates it on first run.
+data/*
+!data/.htaccess
+!data/config.json.example
+
+# Build output
+dist/
+
+# Local Claude Code tooling (settings, project-specific skills)
+.claude/
+
+# Internal working notes — not part of the public distribution
+CLAUDE.md
+CLAUDE-todo.md
+NAMES.md
+
+# Editor / OS noise
+*.log
+.DS_Store
+Thumbs.db

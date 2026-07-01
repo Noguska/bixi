@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="32" height="32">
+  <!-- Bixi mark ("A3" solid shell) on an amber tile: dark hexagon, amber scute lines -->
+  <rect width="40" height="40" rx="9" fill="#f5b13d"/>
+  <path d="M20 4.5 L33 12 V28 L20 35.5 L7 28 V12 Z" fill="#15161a"/>
+  <path d="M20 13.5 L26.5 17.5 V23.5 L20 27.5 L13.5 23.5 V17.5 Z" fill="none" stroke="#f5b13d" stroke-width="2"/>
+  <path d="M20 4.5 V13.5 M33 12 L26.5 17.5 M33 28 L26.5 23.5 M20 35.5 V27.5 M7 28 L13.5 23.5 M7 12 L13.5 17.5" fill="none" stroke="#f5b13d" stroke-width="1.6" stroke-linecap="round"/>
+</svg>
