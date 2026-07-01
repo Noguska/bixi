@@ -131,6 +131,17 @@ it. All other rights are reserved by Noguska LLC.
 Bundled third-party components (highlight.js, the Inter typeface) are distributed
 under their own licenses; see [NOTICE](NOTICE).
 
+## Disclaimer
+
+Bixi is provided **"as is", without warranty of any kind, and is used entirely at
+your own risk.** It performs Subversion operations that change your working copies
+and repository — including commits, checkouts, reverts, deletions, and moves. You
+are responsible for reviewing what you commit and for keeping backups. To the
+maximum extent permitted by law, Noguska LLC accepts no liability for any data
+loss, repository corruption, downtime, or other damages arising from use of this
+software. The full, legally-operative warranty disclaimer and limitation of
+liability are in the [LICENSE](LICENSE) (Apache License 2.0, sections 7 and 8).
+
 ## About
 
 Bixi is built and maintained by **[Noguska LLC](https://www.noguska.com)**, the
