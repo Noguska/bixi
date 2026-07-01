@@ -8,9 +8,7 @@ Drop the folder onto any machine with **PHP** and the **`svn`** command-line
 client, run one launcher, and review your working copy in the browser. No
 database, no Composer, no build step.
 
-<!-- Add a screenshot here once you have one, e.g.:
-![SVN Review](docs/screenshot.png)
--->
+![Bixi — reviewing a change with the side-by-side diff](docs/screenshot.png)
 
 ## Features
 
@@ -25,6 +23,8 @@ database, no Composer, no build step.
   `svn add`-ed first, then committed together.
 - **Multiple projects** — register any number of local working copies.
 - **Cross-platform** — Windows, macOS, and Linux.
+
+![The review queue: per-file status, approvals, and the commit bar](docs/file-list.png)
 
 ## Requirements
 
