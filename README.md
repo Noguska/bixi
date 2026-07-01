@@ -108,7 +108,7 @@ the running app can use that saved login.
 
 ## Project status
 
-Bixi is developed and published by Noguska LLC and shared as-is. External pull
+Bixi is developed and published by Noguska Inc. and shared as-is. External pull
 requests are not being accepted at this time. You're free to fork and adapt it
 within the license terms below.
 
@@ -122,7 +122,7 @@ including inside a commercial company — but you may **not sell it** (nor sell 
 hosting/support service whose value is substantially the software itself), as
 defined by the Commons Clause. That single restriction is the whole point: the
 code is open for everyone to use and build on, but nobody can take it and resell
-it. All other rights are reserved by Noguska LLC.
+it. All other rights are reserved by Noguska Inc..
 
 > Note: because it restricts resale, this is technically **source-available**
 > rather than OSI-approved "open source" — the two behave identically for normal
@@ -137,13 +137,13 @@ Bixi is provided **"as is", without warranty of any kind, and is used entirely a
 your own risk.** It performs Subversion operations that change your working copies
 and repository — including commits, checkouts, reverts, deletions, and moves. You
 are responsible for reviewing what you commit and for keeping backups. To the
-maximum extent permitted by law, Noguska LLC accepts no liability for any data
+maximum extent permitted by law, Noguska Inc. accepts no liability for any data
 loss, repository corruption, downtime, or other damages arising from use of this
 software. The full, legally-operative warranty disclaimer and limitation of
 liability are in the [LICENSE](LICENSE) (Apache License 2.0, sections 7 and 8).
 
 ## About
 
-Bixi is built and maintained by **[Noguska LLC](https://www.noguska.com)**, the
+Bixi is built and maintained by **[Noguska Inc.](https://www.noguska.com)**, the
 company behind **[NolaPro](https://www.nolapro.com)** — our web-based accounting
 and business-management software.
