@@ -173,6 +173,83 @@ switch ($action) {
         project_delete(req_str('id'));
         json_out(['ok' => true]);
 
+    case 'checkout': {
+        // Check out a NEW working copy from a repo URL, then register it as a project.
+        // Two client round-trips: `precheck` (local, fast — reports whether the
+        // destination already exists so the client can confirm) then the real run.
+        $r    = req();
+        $url  = trim(req_str('url'));
+        $dest = norm_path(trim(req_str('path')));
+        $name = trim(req_str('name'));
+
+        if ($url === '')  fail('Repository URL is required');
+        if ($dest === '') fail('Destination path is required');
+        if ($name === '') fail('Name is required');
+        // Destination must be an absolute local path (no ambiguous relative dirs).
+        if ($dest[0] !== '/' && !preg_match('#^[A-Za-z]:/#', $dest)) {
+            fail('Destination must be an absolute path (e.g. D:\\dev\\acme or /home/me/acme).');
+        }
+
+        // Optional revision (blank = HEAD) and depth.
+        $rev = null;
+        $revRaw = $r['rev'] ?? '';
+        if (is_int($revRaw)) {
+            $rev = $revRaw;
+        } elseif (is_string($revRaw) && $revRaw !== '') {
+            if (!ctype_digit($revRaw)) fail('Revision must be a whole number.');
+            $rev = (int)$revRaw;
+        }
+        $depth = is_string($r['depth'] ?? null) ? $r['depth'] : 'infinity';
+        if (!isset(['infinity' => 1, 'immediates' => 1, 'files' => 1, 'empty' => 1][$depth])) {
+            fail('Invalid depth.');
+        }
+
+        // Round 1: local-only existence probe so the client can confirm before we
+        // create anything or hit the network.
+        if (!empty($r['precheck'])) {
+            json_out([
+                'ok'     => true,
+                'exists' => is_dir($dest),
+                'isFile' => is_file($dest),
+                'isWc'   => is_dir($dest . '/.svn'),
+            ]);
+        }
+        if (is_file($dest)) fail('Destination is a file, not a folder.');
+
+        // Auth/URL preflight: a fast read-only round-trip. For a private repo with no
+        // unlocked session, surface needMaster so the client prompts and retries.
+        $pre = svn_url_info($url);
+        if ($pre['code'] !== 0) {
+            $err = trim($pre['err']);
+            $isAuth = stripos($err, 'E170001') !== false || stripos($err, 'E215004') !== false
+                   || stripos($err, 'authoriz') !== false || stripos($err, 'authentic') !== false;
+            if ($isAuth && !$session['ok']) {
+                json_out(['ok' => false, 'needMaster' => true,
+                          'configured' => master_is_configured(), 'reason' => $session['reason']]);
+            }
+            fail($isAuth
+                ? 'SVN authentication failed — check the saved username and password.'
+                : ('Cannot reach that repository URL: ' . ($err !== '' ? $err : 'svn exited with code ' . $pre['code'])));
+        }
+
+        // Create the destination (and any missing parents) if it doesn't exist.
+        if (!is_dir($dest) && !@mkdir($dest, 0777, true) && !is_dir($dest)) {
+            fail('Could not create destination folder: ' . $dest);
+        }
+
+        @set_time_limit(0);   // a full checkout can run for minutes; svn_exec never times out
+
+        $co = svn_checkout($url, $dest, $rev, $depth);
+        if ($co['code'] !== 0) {
+            fail('Checkout failed: ' . (trim($co['err']) !== '' ? trim($co['err']) : 'svn exited with code ' . $co['code']), 500);
+        }
+
+        // Register the freshly checked-out working copy (validates it's a WC via svn_info).
+        $info = svn_info($dest);
+        $project = project_save(['name' => $name, 'path' => $dest, 'url' => $info['url']]);
+        json_out(['ok' => true, 'project' => $project]);
+    }
+
     // -------------------------------------------------------------- status
 
     case 'status': {

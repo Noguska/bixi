@@ -156,6 +156,32 @@ function svn_info(string $path): array {
 }
 
 /**
+ * Read-only remote probe of a repository URL (validates the URL and, for private
+ * repos, the credential). Runs via svn_run so the stored username + unlocked
+ * password are used. Returns ['code','out','err'].
+ */
+function svn_url_info(string $url): array {
+    return svn_run(['info', '--xml', '--', $url], sys_get_temp_dir());
+}
+
+/**
+ * Check out a new working copy from $url into $dest. $rev is a specific revision
+ * or null for HEAD; $depth is an svn --depth value ('infinity'|'immediates'|
+ * 'files'|'empty'). Runs via svn_run so the stored credential is injected when the
+ * session is unlocked. The caller is responsible for lifting the PHP time limit —
+ * a full checkout can run for minutes and svn_exec does not time out.
+ * Returns ['code','out','err'].
+ */
+function svn_checkout(string $url, string $dest, ?int $rev, string $depth): array {
+    $args = ['checkout', '--depth', $depth];
+    if ($rev !== null) { $args[] = '-r'; $args[] = (string)$rev; }
+    $args[] = '--';
+    $args[] = $url;
+    $args[] = $dest;
+    return svn_run($args, sys_get_temp_dir());
+}
+
+/**
  * Repository HEAD revision for a working copy (contacts the server with -r HEAD).
  * Returns the integer HEAD revision, or null if it couldn't be determined.
  */

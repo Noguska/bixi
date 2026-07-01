@@ -21,6 +21,9 @@ database, no Composer, no build step.
   Beyond Compare, FileMerge, …).
 - **Commit the approved set** with a message; unversioned approved files are
   `svn add`-ed first, then committed together.
+- **Check out from a URL** — create a new working copy from a repository URL
+  (optionally at a specific revision or a shallow depth) and register it in one
+  step, right from the dashboard.
 - **Multiple projects** — register any number of local working copies.
 - **Cross-platform** — Windows, macOS, and Linux.
 
@@ -30,8 +33,8 @@ database, no Composer, no build step.
 
 - **PHP 8.2+** on your `PATH` (`php -v`)
 - **Subversion CLI 1.14+** (`svn`) on your `PATH` (`svn --version`)
-- An existing **SVN working copy** to review (this app reviews and commits
-  *pending changes*; it does not check out new working copies)
+- An **SVN working copy** to review — one you already have, or a fresh one you
+  check out from a repository URL right in the app
 - A modern browser
 
 ## Quick start
@@ -103,10 +106,11 @@ to the public internet. Your SVN password is stored under `data/`, which is
 blocked from web access under Apache via `data/.htaccess`; anyone who can reach
 the running app can use that saved login.
 
-## Contributing
+## Project status
 
-Issues and pull requests are welcome. Contributions are accepted under the same
-license as the project (see below).
+Bixi is developed and published by Noguska LLC and shared as-is. External pull
+requests are not being accepted at this time. You're free to fork and adapt it
+within the license terms below.
 
 ## License
 

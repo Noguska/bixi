@@ -140,6 +140,7 @@ const OP_LABELS = {
   master_status: 'Checking credentials…', master_setup: 'Saving credentials…', master_unlock: 'Unlocking…',
   master_lock: 'Locking…', master_change: 'Changing master password…', master_reset: 'Deleting credentials…',
   projects: 'Loading projects…', project_save: 'Saving project…', project_delete: 'Removing project…',
+  checkout: 'Checking out…',
   settings_get: 'Loading settings…', settings_save: 'Saving settings…',
 };
 function opLabel(action) { return OP_LABELS[action] || 'Working…'; }
@@ -345,6 +346,15 @@ async function loadAuth() {
 
 // ---------------------------------------------------------------- dashboard
 
+// Derive a sensible project name from a repo URL: the last path segment, skipping
+// a conventional trunk/tags/branches layout folder.
+function deriveProjectName(url) {
+  const parts = String(url).replace(/[?#].*$/, '').replace(/\/+$/, '').split('/').filter(Boolean);
+  let last = parts.pop() || '';
+  if (['trunk', 'tags', 'branches'].includes(last.toLowerCase())) last = parts.pop() || last;
+  return last;
+}
+
 function renderDashboard(app) {
   app.innerHTML = `
     <div class="topbar">
@@ -359,10 +369,31 @@ function renderDashboard(app) {
       <h1>Projects</h1>
       <div class="sub">SVN working copies registered for review. Click one to open it.</div>
       <div id="proj-list"></div>
-      <div class="proj-form">
-        <div class="field"><label>Name</label><input type="text" id="np-name" placeholder="My Project"></div>
-        <div class="field grow"><label>Working copy path</label><input type="text" id="np-path" placeholder="D:\\htdocs\\myproject"></div>
-        <button class="btn primary" id="np-add">Add Project</button>
+      <div class="proj-add">
+        <div class="proj-add-tabs">
+          <button class="tab active" data-mode="existing">Register existing</button>
+          <button class="tab" data-mode="checkout">Check out new</button>
+        </div>
+        <div class="proj-form" data-form="existing">
+          <div class="field"><label>Name</label><input type="text" id="np-name" placeholder="My Project"></div>
+          <div class="field grow"><label>Working copy path</label><input type="text" id="np-path" placeholder="D:\\htdocs\\myproject"></div>
+          <button class="btn primary" id="np-add">Add Project</button>
+        </div>
+        <div class="proj-form" data-form="checkout" style="display:none">
+          <div class="field grow"><label>Repository URL</label><input type="text" id="co-url" placeholder="https://svn.example.com/acme/trunk"></div>
+          <div class="field grow"><label>Destination folder</label><input type="text" id="co-path" placeholder="D:\\dev\\acme"></div>
+          <div class="field"><label>Name</label><input type="text" id="co-name" placeholder="acme"></div>
+          <div class="field sm"><label>Revision</label><input type="text" id="co-rev" placeholder="HEAD"></div>
+          <div class="field"><label>Depth</label>
+            <select id="co-depth">
+              <option value="infinity">Fully recursive</option>
+              <option value="immediates">Immediate children</option>
+              <option value="files">Files only</option>
+              <option value="empty">This folder only</option>
+            </select>
+          </div>
+          <button class="btn primary" id="co-add">Check out</button>
+        </div>
       </div>
     </div>`;
 
@@ -420,6 +451,48 @@ function renderDashboard(app) {
     try {
       await api('project_save', { name, path });
       await loadProjects(); render();
+    } catch (err) { toast(err.message, 'err'); }
+  };
+
+  // Toggle between the "register existing" and "check out new" forms.
+  app.querySelectorAll('.proj-add-tabs .tab').forEach(tab => {
+    tab.onclick = () => {
+      const mode = tab.dataset.mode;
+      app.querySelectorAll('.proj-add-tabs .tab').forEach(t => t.classList.toggle('active', t === tab));
+      app.querySelectorAll('.proj-form[data-form]').forEach(f => {
+        f.style.display = f.dataset.form === mode ? '' : 'none';
+      });
+    };
+  });
+
+  // Auto-fill the project name from the URL's last meaningful segment, until the
+  // user types their own name.
+  const coName = $('#co-name', app);
+  $('#co-url', app).oninput = e => {
+    if (coName.dataset.touched) return;
+    coName.value = deriveProjectName(e.target.value);
+  };
+  coName.oninput = () => { coName.dataset.touched = '1'; };
+
+  $('#co-add', app).onclick = async () => {
+    const url   = $('#co-url', app).value.trim();
+    const path  = $('#co-path', app).value.trim();
+    const name  = coName.value.trim();
+    const rev   = $('#co-rev', app).value.trim();
+    const depth = $('#co-depth', app).value;
+    if (!url || !path || !name) return toast('URL, destination, and name are required', 'err');
+    if (rev && !/^\d+$/.test(rev)) return toast('Revision must be a whole number', 'err');
+    const params = { url, path, name, depth };
+    if (rev) params.rev = parseInt(rev, 10);
+    try {
+      const chk = await api('checkout', { ...params, precheck: true });
+      if (chk.isFile) return toast('Destination is a file, not a folder', 'err');
+      if (chk.exists && !confirm(chk.isWc
+          ? 'That folder is already a working copy. Check out into it anyway?'
+          : 'The destination folder already exists. Check out into it anyway?')) return;
+      const res = await api('checkout', params);
+      await loadProjects(); render();
+      if (res.project) openProject(res.project.id);
     } catch (err) { toast(err.message, 'err'); }
   };
 

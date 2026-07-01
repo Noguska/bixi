@@ -235,6 +235,27 @@ textarea { resize: vertical; font-family: var(--mono); font-size: 12px; }
 .proj-form .field.grow { flex: 1; min-width: 220px; }
 .proj-form input { width: 100%; }
 
+/* Add-project: tabbed "register existing" / "check out new". */
+.proj-add { margin-top: 18px; }
+.proj-add-tabs { display: flex; gap: 4px; margin-bottom: -1px; }
+.proj-add-tabs .tab {
+  background: none; border: 1px solid transparent; border-bottom: none;
+  color: var(--muted); font: inherit; font-size: 12px; font-weight: 600;
+  padding: 7px 14px; border-radius: 6px 6px 0 0; cursor: pointer;
+}
+.proj-add-tabs .tab:hover { color: var(--text); }
+.proj-add-tabs .tab.active {
+  color: var(--text-bright); background: var(--chrome-bg); border-color: var(--chrome-border);
+}
+.proj-add .proj-form { margin-top: 0; border-top-left-radius: 0; }
+.proj-form select {
+  width: 100%; background: var(--chrome-bg2); border: 1px solid var(--body-border);
+  color: var(--text); border-radius: 4px; padding: 7px 10px; font-size: 12.5px;
+  font-family: inherit; outline: none; cursor: pointer;
+}
+.proj-form select:focus { border-color: var(--gold); }
+.proj-form .field.sm { min-width: 92px; max-width: 110px; }
+
 /* ----------------------------------------------------------- project view */
 
 .project-view { flex: 1; display: flex; flex-direction: column; min-height: 0; }

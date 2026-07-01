@@ -10,8 +10,9 @@ committing them. No database, no Composer, no build step. It runs on
 
 - **PHP 8.2 or newer** on your `PATH`. Check with `php -v`.
 - **Subversion command-line client 1.14+** (`svn`) on your `PATH`. Check with `svn --version`.
-- An existing **SVN working copy** somewhere on disk (this app reviews and commits
-  *pending changes* — it does not check out new working copies).
+- An **SVN working copy** to review — either one you already have on disk, or a
+  fresh one you check out from a repository URL directly in the app (see
+  [§4](#4-first-time-setup-in-the-app)).
 - A modern browser.
 - *(Optional)* an external **diff tool** — VS Code, TortoiseSVN, Meld, Beyond
   Compare, FileMerge, etc. — if you want side-by-side diffs in a desktop app.
@@ -61,8 +62,15 @@ Windows; see [§5](#5-external-diff-tool--desktop-launching).
 
 1. **Sign in to SVN** (top-right) — one global username/password used for all repo
    access. It's stored under `data/` on this machine only.
-2. **Add a project** — give it a name and the path to your SVN working copy
-   (e.g. `D:\htdocs\myproject` or `/home/me/projects/app`). Add as many as you like.
+2. **Add a project** — on the dashboard, pick one of two tabs:
+   - **Register existing** — a name and the path to a working copy you already
+     have (e.g. `D:\htdocs\myproject` or `/home/me/projects/app`).
+   - **Check out new** — a repository URL and a destination folder; Bixi runs
+     `svn checkout` (optionally at a specific revision, or with a shallow depth
+     for very large repos) and registers the result. Private repos use your saved
+     SVN login. Large checkouts run best in app mode (no request timeout).
+
+   Add as many as you like.
 3. Click a project to start reviewing. **Settings** (top-right) is covered next.
 
 ---
