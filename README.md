@@ -130,3 +130,9 @@ it. All other rights are reserved by Noguska LLC.
 
 Bundled third-party components (highlight.js, the Inter typeface) are distributed
 under their own licenses; see [NOTICE](NOTICE).
+
+## About
+
+Bixi is built and maintained by **[Noguska LLC](https://www.noguska.com)**, the
+company behind **[NolaPro](https://www.nolapro.com)** — our web-based accounting
+and business-management software.
