@@ -47,7 +47,7 @@ const state = {
   committing: false,    // commit specifically — drives the Commit button spinner
   busyPaths: new Set(), // paths with an in-flight op (read/revert/…): row spinner
   auth: { configured: false, username: null, unlocked: false },  // master-password / SVN credential state
-  activeOps: new Map(), // id -> label for the bottom status bar (in-flight AJAX / svn work)
+  activeOps: new Map(), // id -> {label, ctrl} for the bottom status bar (ctrl set = abortable)
 };
 
 // ------------------------------------------------------- busy / lock helpers
@@ -88,8 +88,23 @@ async function runFileOp(path, fn) {
 
 // ------------------------------------------------------------------ helpers
 
-async function api(action, params = {}, _retried = false) {
-  const opId = pushOp(opLabel(action));   // surface this request in the bottom status bar
+// Actions that are safe to abandon mid-flight: read-only on the server, so
+// aborting the fetch just stops waiting (any svn call it started has no effects).
+// These get an AbortController — the status bar shows an × for them, and callers
+// may pass opts.timeoutMs for an automatic client-side abort.
+const ABORTABLE_ACTIONS = new Set([
+  'projects', 'status', 'dirs', 'diff', 'update_check', 'log', 'revdiff',
+  'eol_info', 'eol_scan', 'props_get', 'get_ignore',
+  'merge_list', 'merge_log', 'merge_eligible', 'merge_preview',
+  'master_status', 'settings_get',
+]);
+
+async function api(action, params = {}, opts = {}) {
+  const ctrl = ABORTABLE_ACTIONS.has(action) ? new AbortController() : null;
+  let timedOut = false;
+  const timer = (ctrl && opts.timeoutMs)
+    ? setTimeout(() => { timedOut = true; ctrl.abort(); }, opts.timeoutMs) : null;
+  const opId = pushOp(opLabel(action), ctrl);   // surface this request in the bottom status bar
   try {
     // Attach the per-session unlock token+key (if any) so the server can resolve the
     // SVN credential for credential-gated actions (commit).
@@ -97,27 +112,39 @@ async function api(action, params = {}, _retried = false) {
     const body = { ...params };
     if (sess) { body.mtoken = sess.token; body.mkey = sess.key; }
 
-    const res = await fetch('api.php?action=' + encodeURIComponent(action), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+    let res;
+    try {
+      res = await fetch('api.php?action=' + encodeURIComponent(action), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: ctrl ? ctrl.signal : undefined,
+      });
+    } catch (err) {
+      if (ctrl && ctrl.signal.aborted) {
+        throw new Error(timedOut
+          ? `Timed out after ${Math.round(opts.timeoutMs / 1000)}s — repository unreachable?`
+          : 'Cancelled');
+      }
+      throw err;
+    }
     const data = await res.json().catch(() => ({ ok: false, error: 'Bad response' }));
 
     // Server says this action needs an unlocked session: prompt (unlock, or first-time
     // setup), then retry the original request exactly once — transparent to callers.
-    if (data && data.ok === false && data.needMaster && !_retried) {
+    if (data && data.ok === false && data.needMaster && !opts.retried) {
       popOp(opId);                          // stop showing this op while the modal is up
       if (sess) setMasterSession(null);     // our session was missing/expired
       const ok = await promptMasterGate({ configured: !!data.configured });
       if (!ok) throw new Error('Master password required');
       await loadAuth(); renderAuthArea();
-      return await api(action, params, true);
+      return await api(action, params, { ...opts, retried: true });
     }
 
     if (!data.ok) throw new Error(data.error || 'Request failed');
     return data;
   } finally {
+    if (timer) clearTimeout(timer);
     popOp(opId);                            // harmless if already popped above
   }
 }
@@ -146,7 +173,7 @@ const OP_LABELS = {
 function opLabel(action) { return OP_LABELS[action] || 'Working…'; }
 
 let opSeq = 0;
-function pushOp(label) { const id = ++opSeq; state.activeOps.set(id, label); renderStatusBar(); return id; }
+function pushOp(label, ctrl = null) { const id = ++opSeq; state.activeOps.set(id, { label, ctrl }); renderStatusBar(); return id; }
 function popOp(id) { state.activeOps.delete(id); renderStatusBar(); }
 
 // Render the bar from the active-op set. Two debounces keep it from flickering:
@@ -164,8 +191,12 @@ function renderStatusBar() {
   if (ops.length) {                                  // work in flight
     clearTimeout(sbHideTimer); sbHideTimer = null;   // cancel any pending hide — keep it up
     const extra = ops.length > 1 ? ` (+${ops.length - 1})` : '';
-    el.innerHTML = `<span class="sb-label">${esc(ops[ops.length - 1] + extra)}</span>`
-      + `<span class="sb-bar"><span class="sb-fill"></span></span>`;
+    const abortable = ops.filter(o => o.ctrl);       // read-only ops we can abandon
+    el.innerHTML = `<span class="sb-label">${esc(ops[ops.length - 1].label + extra)}</span>`
+      + `<span class="sb-bar"><span class="sb-fill"></span></span>`
+      + (abortable.length ? `<button class="sb-abort" title="Cancel">×</button>` : '');
+    const btn = el.querySelector('.sb-abort');
+    if (btn) btn.onclick = () => { for (const o of abortable) o.ctrl.abort(); };
     if (!el.classList.contains('active') && !sbShowTimer) {
       sbShowTimer = setTimeout(() => {
         sbShowTimer = null;
@@ -228,6 +259,8 @@ const ICONS = {
   up:      '<path d="M12 19V5"/><path d="M5 12l7-7 7 7"/>',
   move:    '<path d="M21 11V9a2 2 0 0 0-2-2h-6l-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h6"/><path d="M14 16h7"/><path d="M18 13l3 3-3 3"/>',
   lock:    '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  edit:    '<path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>',
+  recheck: '<path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/>',
   settings:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
 };
 function icon(name) {
@@ -267,14 +300,24 @@ function moonLitPath(cx, cy, R, p) {
   const rx = Math.max(0.01, R * Math.abs(cosv));
   const waxing = p < 0.5;
   const outerSweep = waxing ? 1 : 0;                              // lit limb: right (waxing) / left (waning)
-  const termSweep = waxing ? (cosv >= 0 ? 1 : 0) : (cosv >= 0 ? 0 : 1);
+  // Terminator bulges toward the lit limb for a crescent (cosv>0), away from it
+  // for a gibbous (cosv<0) — so the lit region grows past a half-disc.
+  const termSweep = waxing ? (cosv >= 0 ? 0 : 1) : (cosv >= 0 ? 1 : 0);
   return `M${cx} ${cy - R} A${R} ${R} 0 0 ${outerSweep} ${cx} ${cy + R} A${rx} ${R} 0 0 ${termSweep} ${cx} ${cy - R} Z`;
 }
+// The scene is viewed from Bixi's homeland: the lit limb is tilted as for an
+// observer at Mount Tai (36.25°N — Bixi steles stand at its Dai Temple).
+// Schematic: the terminator leans (90° − latitude) from vertical — clockwise
+// while waxing, counter-clockwise while waning. Exact at the limits (equatorial
+// "boat" crescent, upright polar limb); season/hour variation is ignored.
+const MOON_VIEW_LAT = 36.25;
+
 // Faint moon overlay: soft glow + a light full outline (always shown, even at new
 // moon) + the lit shape for the current phase.
 function moonSvg(date = new Date()) {
   const p = moonPhaseFraction(date);
   const cx = 100, cy = 100, R = 70;
+  const rot = (p < 0.5 ? 1 : -1) * (90 - MOON_VIEW_LAT);
   return `
     <svg viewBox="0 0 200 200" width="100%" height="100%" aria-hidden="true">
       <defs><radialGradient id="dm-glow" cx="50%" cy="50%" r="50%">
@@ -284,7 +327,8 @@ function moonSvg(date = new Date()) {
       </radialGradient></defs>
       <circle cx="${cx}" cy="${cy}" r="98" fill="url(#dm-glow)"/>
       <circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="#f5b13d" stroke-opacity="0.28" stroke-width="1"/>
-      <path d="${moonLitPath(cx, cy, R, p)}" fill="#f4e6c6" fill-opacity="0.55" stroke="#f5cf86" stroke-opacity="0.3" stroke-width="0.8"/>
+      <path d="${moonLitPath(cx, cy, R, p)}" transform="rotate(${rot.toFixed(1)} ${cx} ${cy})"
+        fill="#f4e6c6" fill-opacity="0.55" stroke="#f5cf86" stroke-opacity="0.3" stroke-width="0.8"/>
     </svg>`;
 }
 
@@ -417,31 +461,31 @@ function renderDashboard(app) {
     state.projects.forEach(p => checkProjectUpdate(p.id));
   }
 
-  list.onclick = async e => {
+  list.onclick = e => {
     const upd = e.target.closest('[data-update-btn]');
     if (upd) { e.stopPropagation(); runProjectUpdate(upd.dataset.updateBtn); return; }
     const del = e.target.closest('[data-del]');
     const edit = e.target.closest('[data-edit]');
     if (del) {
       e.stopPropagation();
-      const p = state.projects.find(x => x.id === del.dataset.del);
-      if (!confirm(`Remove project "${p.name}"? (Review state JSON is deleted too; the working copy is untouched.)`)) return;
-      await api('project_delete', { id: p.id }).catch(err => toast(err.message, 'err'));
-      saveCommitDraft(p.id, '');  // drop any saved commit-message draft
-      await loadProjects(); render();
+      removeProject(state.projects.find(x => x.id === del.dataset.del));
       return;
     }
     if (edit) {
       e.stopPropagation();
-      const p = state.projects.find(x => x.id === edit.dataset.edit);
-      const name = prompt('Project name:', p.name); if (name === null) return;
-      const path = prompt('Working copy path:', p.path); if (path === null) return;
-      try { await api('project_save', { id: p.id, name, path }); await loadProjects(); render(); }
-      catch (err) { toast(err.message, 'err'); }
+      editProject(state.projects.find(x => x.id === edit.dataset.edit));
       return;
     }
     const card = e.target.closest('.proj-card');
     if (card) openProject(card.dataset.id);
+  };
+
+  list.oncontextmenu = e => {
+    const card = e.target.closest('.proj-card');
+    if (!card) return;
+    e.preventDefault();
+    const p = state.projects.find(x => x.id === card.dataset.id);
+    if (p) openContextMenu(e.clientX, e.clientY, dashProjectMenu(p));
   };
 
   $('#np-add', app).onclick = async () => {
@@ -500,6 +544,46 @@ function renderDashboard(app) {
   renderAuthArea();
 }
 
+async function editProject(p) {
+  const name = prompt('Project name:', p.name); if (name === null) return;
+  const path = prompt('Working copy path:', p.path); if (path === null) return;
+  try { await api('project_save', { id: p.id, name, path }); await loadProjects(); render(); }
+  catch (err) { toast(err.message, 'err'); }
+}
+
+async function removeProject(p) {
+  if (!confirm(`Remove project "${p.name}"? (Review state JSON is deleted too; the working copy is untouched.)`)) return;
+  await api('project_delete', { id: p.id }).catch(err => toast(err.message, 'err'));
+  saveCommitDraft(p.id, '');  // drop any saved commit-message draft
+  await loadProjects(); render();
+}
+
+// Right-click menu for a dashboard project card. Everything here runs against an
+// explicit project id — state.project is null on the dashboard.
+function dashProjectMenu(p) {
+  const copyItems = [
+    { label: 'Copy Name', onClick: () => copyText(p.name, 'name') },
+    { label: 'Copy Path', onClick: () => copyText(p.path, 'path') },
+  ];
+  if (p.url) copyItems.push({ label: 'Copy Repo URL', onClick: () => copyText(p.url, 'repo URL') });
+  return [
+    { label: 'Open', icon: 'open', onClick: () => openProject(p.id) },
+    { label: 'Open in Explorer', icon: 'explorer', onClick: async () => {
+        try { await api('reveal', { id: p.id, path: '' }); toast(`Showing ${p.name} in Explorer…`, 'ok'); }
+        catch (err) { toast(err.message, 'err'); }
+      } },
+    { label: 'Copy', icon: 'copy', submenu: copyItems },
+    { separator: true },
+    { label: 'Update', icon: 'update', onClick: () => runProjectUpdate(p.id) },
+    { label: 'Re-check Status', icon: 'recheck', onClick: () => checkProjectUpdate(p.id) },
+    { label: 'History…', icon: 'history', onClick: () => openHistory('', p.id) },
+    { label: 'SVN Cleanup…', icon: 'cleanup', onClick: () => openCleanupModal('', p.name, p) },
+    { separator: true },
+    { label: 'Edit…', icon: 'edit', onClick: () => editProject(p) },
+    { label: 'Remove…', icon: 'delete', danger: true, onClick: () => removeProject(p) },
+  ];
+}
+
 // Per-project update slot on the dashboard. Renders the spinner/up-to-date/
 // update-available state into the card's [data-upd] cell (no-op if the card
 // has since been re-rendered away).
@@ -514,7 +598,9 @@ function setProjectUpdateSlot(id, html) {
 async function checkProjectUpdate(id) {
   setProjectUpdateSlot(id, `<button class="btn sm" disabled><span class="spinner"></span> Update</button>`);
   try {
-    const d = await api('update_check', { id });
+    // Client-side backstop over the server's own 15s svn timeout, so the spinner
+    // clears even if the request itself stalls (VPN down / IP-firewalled repo).
+    const d = await api('update_check', { id }, { timeoutMs: 20000 });
     const cnt = document.querySelector(`[data-pcount="${id}"]`);
     if (cnt) {
       if (d.pendingCount > 0) { cnt.className = 'pcount pending'; cnt.textContent = `${d.pendingCount} pending`; }
@@ -528,8 +614,9 @@ async function checkProjectUpdate(id) {
       setProjectUpdateSlot(id, `<button class="btn sm" disabled title="r${d.localRevision} — up to date">Up to date</button>`);
     }
   } catch (err) {
+    const unreachable = /timed out|unreachable/i.test(err.message);
     setProjectUpdateSlot(id,
-      `<button class="btn sm" disabled title="${esc(err.message)}">Check failed</button>`);
+      `<button class="btn sm" disabled title="${esc(err.message)}">${unreachable ? 'Unreachable' : 'Check failed'}</button>`);
   }
 }
 
@@ -1465,8 +1552,8 @@ function confirmBatchDelete(files) {
   $('#bdel-forever', overlay).onclick = () => run('forever');
 }
 
-function openHistory(relPath) {
-  const url = 'history.php?id=' + encodeURIComponent(state.project.id)
+function openHistory(relPath, projId = state.project.id) {
+  const url = 'history.php?id=' + encodeURIComponent(projId)
             + '&path=' + encodeURIComponent(relPath);
   window.open(url, '', 'width=1050,height=780,resizable=yes,scrollbars=yes');
 }
@@ -1905,21 +1992,27 @@ function confirmDelete(relPath, label, isDir, status) {
   $('#del-forever', overlay).onclick = e => run('forever', e.currentTarget);
 }
 
-function openCleanupModal(relPath, label) {
+// proj lets the dashboard run cleanup on a project that isn't open (state.project
+// is null there); inside the project view it defaults to the current project.
+function openCleanupModal(relPath, label, proj = state.project) {
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.innerHTML = `
     <div class="modal">
       <h3>SVN Cleanup</h3>
-      <div class="mpath">${esc(relPath || state.project.name)}</div>
-      <p class="warn-text">Clears stale working-copy locks and finishes interrupted operations on:<br>
-        ${relPath === '' ? 'the working copy' : `<b>${esc(label)}</b>`}</p>
-      <label class="chk"><input type="checkbox" id="cl-ignored">
-        <span>Remove ignored files</span></label>
+      <div class="mpath">${esc(relPath || proj.name)}</div>
+      <p class="warn-text">Clears stale working-copy locks and finishes interrupted operations on
+        ${relPath === '' ? 'the working copy' : `<b>${esc(label)}</b>`}.
+        The options below are all optional — leave everything unchecked for a plain lock-clearing cleanup.</p>
       <label class="chk"><input type="checkbox" id="cl-vacuum">
-        <span>Vacuum pristine copies</span></label>
-      <label class="chk"><input type="checkbox" id="cl-unversioned">
-        <span>Remove unversioned files<br><em>Permanently deletes every unversioned file under this folder.</em></span></label>
+        <span>Vacuum pristine copies<br><em>Reclaims disk space from SVN's internal cache. Safe.</em></span></label>
+      <div class="danger-zone">
+        <div class="dz-label">Danger zone — deletes files from disk</div>
+        <label class="chk"><input type="checkbox" id="cl-ignored">
+          <span>Remove ignored files<br><em>Permanently deletes every file matched by svn:ignore under this folder.</em></span></label>
+        <label class="chk"><input type="checkbox" id="cl-unversioned">
+          <span>Remove unversioned files<br><em>Permanently deletes every unversioned file under this folder.</em></span></label>
+      </div>
       <div class="macts">
         <button class="btn" id="cl-cancel">Cancel</button>
         <button class="btn primary" id="cl-run">Run Cleanup</button>
@@ -1942,10 +2035,13 @@ function openCleanupModal(relPath, label) {
     btn.disabled = true; btn.textContent = 'Cleaning…';
     lockUI(); setPathBusy(relPath, true);
     try {
-      const data = await api('cleanup', { id: state.project.id, path: relPath, opts });
+      const data = await api('cleanup', { id: proj.id, path: relPath, opts });
       toast(`Cleanup complete\n${data.output}`, 'ok');
       close();
-      await refreshStatus();
+      // In the project view, re-pull status; on the dashboard, refresh the card
+      // (removing ignored/unversioned files changes its pending count).
+      if (state.project) await refreshStatus();
+      else checkProjectUpdate(proj.id);
     } catch (err) {
       btn.disabled = false; btn.textContent = 'Run Cleanup';
       toast(err.message, 'err');

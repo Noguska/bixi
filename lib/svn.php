@@ -10,7 +10,8 @@ require_once __DIR__ . '/auth.php';
  * `--password-from-stdin` so it never appears on the command line.
  * Returns ['code' => int, 'out' => string, 'err' => string].
  */
-function svn_exec(array $cmd, string $cwd, ?string $stdin = null): array {
+function svn_exec(array $cmd, string $cwd, ?string $stdin = null, int $timeoutSec = 0): array {
+    if ($timeoutSec > 0) return svn_exec_timed($cmd, $cwd, $stdin, $timeoutSec);
     $proc = proc_open($cmd, [
         0 => ['pipe', 'r'],
         1 => ['pipe', 'w'],
@@ -26,6 +27,56 @@ function svn_exec(array $cmd, string $cwd, ?string $stdin = null): array {
     fclose($pipes[1]);
     fclose($pipes[2]);
     $code = proc_close($proc);
+    return ['code' => $code, 'out' => $out, 'err' => $err];
+}
+
+/**
+ * svn_exec with a hard wall-clock limit, for network ops that would otherwise hang
+ * when the repo host silently drops packets (VPN down / IP firewall) — svn has no
+ * client-side connect timeout of its own (serf only gives up after ~600s), and
+ * PHP's max_execution_time can't interrupt a blocked native read.
+ *
+ * Windows PHP supports neither stream_select() nor non-blocking mode on proc_open
+ * pipes (stream_set_blocking returns false; any pipe read blocks until the child
+ * exits). So the child's stdout/stderr go to temp files instead, and the parent
+ * polls only proc_get_status() + the clock — which never blocks — then kills the
+ * child on expiry and reads the files. stdin stays a pipe (short write, no block).
+ */
+function svn_exec_timed(array $cmd, string $cwd, ?string $stdin, int $timeoutSec): array {
+    $outFile = tempnam(sys_get_temp_dir(), 'svo');
+    $errFile = tempnam(sys_get_temp_dir(), 'sve');
+    $proc = proc_open($cmd, [
+        0 => ['pipe', 'r'],
+        1 => ['file', $outFile, 'w'],
+        2 => ['file', $errFile, 'w'],
+    ], $pipes, $cwd);
+    if (!is_resource($proc)) {
+        @unlink($outFile);
+        @unlink($errFile);
+        fail('Failed to start svn process', 500);
+    }
+    if ($stdin !== null && $stdin !== '') fwrite($pipes[0], $stdin);
+    fclose($pipes[0]);
+
+    $deadline = microtime(true) + $timeoutSec;
+    $timedOut = false;
+    $code = -1;
+    for (;;) {
+        $st = proc_get_status($proc);
+        if (!$st['running']) { $code = $st['exitcode']; break; }
+        if (microtime(true) >= $deadline) { $timedOut = true; proc_terminate($proc); break; }
+        usleep(50000);   // 50 ms
+    }
+    proc_close($proc);
+
+    $out = (string)@file_get_contents($outFile);
+    $err = (string)@file_get_contents($errFile);
+    @unlink($outFile);
+    @unlink($errFile);
+    if ($timedOut) {
+        return ['code' => -1, 'out' => $out, 'timeout' => true,
+                'err' => "svn timed out after {$timeoutSec}s — repository unreachable (VPN / firewall / network down?)"];
+    }
     return ['code' => $code, 'out' => $out, 'err' => $err];
 }
 
@@ -100,10 +151,15 @@ function svn_preflight(): array {
  * stored username and — when the request is unlocked — the resolved password via
  * stdin (`--password-from-stdin`, never on the command line). Local/read ops work
  * without the password; auth-required network ops need an active unlock session.
- * Returns ['code' => int, 'out' => string, 'err' => string].
+ * $timeoutSec > 0 adds a hard wall-clock limit (see svn_exec).
+ * Returns ['code' => int, 'out' => string, 'err' => string, 'timeout'? => true].
  */
-function svn_run(array $args, string $cwd): array {
-    $cmd = ['svn', '--non-interactive'];
+function svn_run(array $args, string $cwd, int $timeoutSec = 0): array {
+    // http-timeout caps serf's socket *inactivity* (default 600s) so http(s)
+    // network ops error out rather than hang when the host stops responding;
+    // an actively-transferring checkout/update never trips it. Ignored for
+    // local operations and file:// / svn:// repos.
+    $cmd = ['svn', '--non-interactive', '--config-option', 'servers:global:http-timeout=60'];
     $stdin = null;
     $user = auth_username();
     if ($user !== null) {
@@ -117,7 +173,7 @@ function svn_run(array $args, string $cwd): array {
         }
     }
     $cmd = array_merge($cmd, $args);
-    return svn_exec($cmd, $cwd, $stdin);
+    return svn_exec($cmd, $cwd, $stdin, $timeoutSec);
 }
 
 /**
@@ -131,7 +187,8 @@ function svn_check_auth(string $username, string $password, string $url): array 
         '--username', $username, '--password-from-stdin',
         'info', '--xml', '--', $url,
     ];
-    $r = svn_exec($cmd, sys_get_temp_dir(), $password);
+    $r = svn_exec($cmd, sys_get_temp_dir(), $password, 20);
+    if ($r['timeout'] ?? false) return ['ok' => false, 'error' => 'Could not reach the repository (timed out after 20s) — VPN / network down?'];
     if ($r['code'] === 0) return ['ok' => true, 'error' => ''];
     $err = trim($r['err']);
     if (stripos($err, 'E170001') !== false
@@ -186,7 +243,8 @@ function svn_checkout(string $url, string $dest, ?int $rev, string $depth): arra
  * Returns the integer HEAD revision, or null if it couldn't be determined.
  */
 function svn_remote_revision(string $path): ?int {
-    $r = svn_run(['info', '-r', 'HEAD', '--xml', '.'], $path);
+    $r = svn_run(['info', '-r', 'HEAD', '--xml', '.'], $path, 15);
+    if ($r['timeout'] ?? false) fail('Timed out contacting the repository (15s) — VPN / network down?', 504);
     if ($r['code'] !== 0) fail('svn info -r HEAD failed: ' . trim($r['err']), 500);
     $xml = simplexml_load_string($r['out']);
     if ($xml === false || !isset($xml->entry)) return null;

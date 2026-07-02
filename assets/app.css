@@ -81,6 +81,11 @@ body {
   position: relative; width: 130px; height: 4px; flex-shrink: 0;
   border-radius: 2px; background: var(--body-border); overflow: hidden;
 }
+.statusbar .sb-abort {
+  flex-shrink: 0; border: none; background: none; cursor: pointer;
+  color: var(--muted); font-size: 15px; line-height: 1; padding: 0 3px; border-radius: 4px;
+}
+.statusbar .sb-abort:hover { color: var(--red); background: var(--red-soft); }
 .statusbar .sb-fill {
   position: absolute; top: 0; height: 100%; width: 38%;
   border-radius: 2px; background: var(--gold);
@@ -645,6 +650,16 @@ textarea { resize: vertical; font-family: var(--mono); font-size: 12px; }
 
 .modal .warn-text { font-size: 12.5px; color: var(--text); line-height: 1.5; margin: 0 0 4px; }
 .modal .warn-text b { color: var(--amber); font-weight: 600; word-break: break-all; }
+
+/* Opt-in destructive options grouped behind a red border (e.g. SVN Cleanup). */
+.modal .danger-zone {
+  margin-top: 10px; padding: 8px 12px 6px; border-radius: 8px;
+  border: 1px solid rgba(240,97,106,.35); background: var(--red-soft);
+}
+.modal .danger-zone .dz-label {
+  font-size: 10.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--red); margin-bottom: 4px;
+}
 
 /* properties editor: label / control grid */
 .prop-grid { display: grid; grid-template-columns: 120px 1fr; gap: 8px 10px; align-items: center; }
