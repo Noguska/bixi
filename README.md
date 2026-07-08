@@ -25,9 +25,36 @@ database, no Composer, no build step.
   (optionally at a specific revision or a shallow depth) and register it in one
   step, right from the dashboard.
 - **Multiple projects** — register any number of local working copies.
+- **AI-ready rejections** — rejection notes double as a fix list an AI coding
+  assistant can work through ([see below](#review-with-an-ai-in-the-loop)).
 - **Cross-platform** — Windows, macOS, and Linux.
 
 ![The review queue: per-file status, approvals, and the commit bar](docs/file-list.png)
+
+## Review with an AI in the loop
+
+Rejections in Bixi aren't just bookkeeping — the reason **Reject takes a note**
+is so a mass review can end as a hand-off to an AI coding assistant:
+
+1. **Sweep the changeset in Bixi.** Approve what's good; reject each problem
+   file with a note saying what's wrong ("escape this output before rendering",
+   "wrong null-guard — check the array key instead", …).
+2. **Hand the rejections to your assistant.** Review state is plain JSON under
+   `data/`, and the repo ships **[AI-FIXES.md](AI-FIXES.md)** — a self-contained
+   instructions file any coding assistant can follow to locate every rejected
+   file in your working copy and fix it, guided by your notes. For example:
+
+   ```text
+   Read AI-FIXES.md in D:\tools\bixi and follow it for the project named
+   "MyProject": fix every rejected file, using its rejection note as the
+   instruction. Don't commit or run any state-changing svn commands —
+   I'll re-review and commit in Bixi.
+   ```
+
+3. **Re-review the fixes.** Bixi fingerprints file content at review time, so
+   the moment the assistant edits a rejected file, the stale rejection is
+   discarded automatically and the file returns to the queue as unreviewed.
+   Nothing to reset by hand — reject, fix, re-review, commit.
 
 ## Requirements
 
