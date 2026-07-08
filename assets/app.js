@@ -461,8 +461,15 @@ function renderDashboard(app) {
         <div class="proj-update" data-upd="${p.id}"><button class="btn sm" disabled><span class="spinner"></span> Update</button></div>
       </div>`).join('');
     // Kick off an update check per project (queued one-at-a-time inside
-    // checkProjectUpdate; every card shows its spinner immediately).
-    state.projects.forEach(p => checkProjectUpdate(p.id));
+    // checkProjectUpdate; every card shows its spinner immediately). Cards whose
+    // check already completed this session restore the cached result instead —
+    // this is how the queue resumes after a trip into a project.
+    state.projects.forEach(p => {
+      const cached = updCheckCache.get(p.id);
+      if (cached) applyUpdateCheckResult(p.id, cached);
+      else if (!updateCheckPending(p.id)) checkProjectUpdate(p.id);
+    });
+    pumpUpdateChecks();   // resume anything queued while a project view was open
     const updAll = $('#btn-update-all', app);
     if (updAll) updAll.onclick = updateAllProjects;
   }
@@ -608,29 +615,72 @@ function setProjectUpdateSlot(id, html) {
 // made them queue server-side while each one's 20s client timer kept ticking, so
 // every project behind one slow check falsely reported "Unreachable". Queuing
 // client-side scopes each timeout to its own request.
-let updCheckQueue = Promise.resolve();
-function checkProjectUpdate(id) {
-  setProjectUpdateSlot(id, `<button class="btn sm" disabled><span class="spinner"></span> Update</button>`);
-  return updCheckQueue = updCheckQueue.then(() => checkProjectUpdateNow(id));
+//
+// The queue only runs while the dashboard is showing: opening a project drops
+// whatever is still queued so those checks don't compete with the project view's
+// own requests (an already in-flight check just finishes). Completed results are
+// cached, so returning to the dashboard resumes where the queue left off —
+// already-checked cards restore instantly and only the rest re-check.
+let updCheckQueue = [];            // [{id, resolve}] awaiting a check
+let updCheckBusy = false;          // a checkProjectUpdateNow is in flight
+let updCheckInFlight = null;       // id of the check currently in flight
+const updCheckCache = new Map();   // id → last successful result (see applyUpdateCheckResult)
+
+// True if a fresh result for this project is already on its way (queued or in
+// flight) — renderDashboard uses this to avoid queueing duplicate checks.
+function updateCheckPending(id) {
+  return updCheckInFlight === id || updCheckQueue.some(j => j.id === id);
 }
 
-async function checkProjectUpdateNow(id) {   // never rejects, so the queue chain can't break
+function checkProjectUpdate(id) {
+  setProjectUpdateSlot(id, `<button class="btn sm" disabled><span class="spinner"></span> Update</button>`);
+  return new Promise(resolve => {
+    updCheckQueue.push({ id, resolve });
+    pumpUpdateChecks();
+  });
+}
+
+async function pumpUpdateChecks() {
+  if (updCheckBusy) return;
+  updCheckBusy = true;
+  while (updCheckQueue.length && state.view === 'dashboard') {
+    const job = updCheckQueue.shift();
+    updCheckInFlight = job.id;
+    await checkProjectUpdateNow(job.id);
+    updCheckInFlight = null;
+    job.resolve();
+  }
+  updCheckBusy = false;
+}
+
+// Called when leaving the dashboard. Unsent checks are dropped, not deferred —
+// renderDashboard re-queues any project without a cached result on the way back.
+function dropQueuedUpdateChecks() {
+  for (const job of updCheckQueue.splice(0)) job.resolve();
+}
+
+function applyUpdateCheckResult(id, r) {
+  setProjectUpdateSlot(id, r.slot);
+  const cnt = document.querySelector(`[data-pcount="${id}"]`);
+  if (cnt && r.pcount) { cnt.className = r.pcount.cls; cnt.textContent = r.pcount.text; }
+}
+
+async function checkProjectUpdateNow(id) {   // never rejects, so the queue can't stall
   try {
     // Client-side backstop over the server's own 15s svn timeout, so the spinner
     // clears even if the request itself stalls (VPN down / IP-firewalled repo).
     const d = await api('update_check', { id }, { timeoutMs: 20000 });
-    const cnt = document.querySelector(`[data-pcount="${id}"]`);
-    if (cnt) {
-      if (d.pendingCount > 0) { cnt.className = 'pcount pending'; cnt.textContent = `${d.pendingCount} pending`; }
-      else { cnt.className = 'pcount clean'; cnt.textContent = '✓ Clean'; }
-    }
-    if (d.updateAvailable) {
-      setProjectUpdateSlot(id,
-        `<button class="btn sm primary" data-update-btn="${id}" title="r${d.localRevision} → r${d.headRevision}">`
-        + `${icon('update')} Update <span class="upd-rev">r${d.headRevision}</span></button>`);
-    } else {
-      setProjectUpdateSlot(id, `<button class="btn sm" disabled title="r${d.localRevision} — up to date">Up to date</button>`);
-    }
+    const r = {
+      pcount: d.pendingCount > 0
+        ? { cls: 'pcount pending', text: `${d.pendingCount} pending` }
+        : { cls: 'pcount clean', text: '✓ Clean' },
+      slot: d.updateAvailable
+        ? `<button class="btn sm primary" data-update-btn="${id}" title="r${d.localRevision} → r${d.headRevision}">`
+          + `${icon('update')} Update <span class="upd-rev">r${d.headRevision}</span></button>`
+        : `<button class="btn sm" disabled title="r${d.localRevision} — up to date">Up to date</button>`,
+    };
+    updCheckCache.set(id, r);   // failures aren't cached — they retry on the next dashboard visit
+    applyUpdateCheckResult(id, r);
   } catch (err) {
     const unreachable = /timed out|unreachable/i.test(err.message);
     setProjectUpdateSlot(id,
@@ -971,6 +1021,11 @@ async function openSettingsModal() {
 // ------------------------------------------------------------- project view
 
 async function openProject(id) {
+  // Stop dashboard update checks from competing with the project view's requests:
+  // drop everything still queued, and forget this project's cached result — its
+  // pending count is about to change while we work in it.
+  dropQueuedUpdateChecks();
+  updCheckCache.delete(id);
   state.view = 'project';
   state.project = state.projects.find(p => p.id === id) || null;
   state.files = [];
