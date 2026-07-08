@@ -64,7 +64,7 @@ Windows; see [§5](#5-external-diff-tool--desktop-launching).
    access. It's stored under `data/` on this machine only.
 2. **Add a project** — on the dashboard, pick one of two tabs:
    - **Register existing** — a name and the path to a working copy you already
-     have (e.g. `D:\htdocs\myproject` or `/home/me/projects/app`).
+     have (e.g. `C:\projects\myproject` or `/home/me/projects/app`).
    - **Check out new** — a repository URL and a destination folder; Bixi runs
      `svn checkout` (optionally at a specific revision, or with a shallow depth
      for very large repos) and registers the result. Private repos use your saved

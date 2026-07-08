@@ -45,7 +45,7 @@ is so a mass review can end as a hand-off to an AI coding assistant:
    file in your working copy and fix it, guided by your notes. For example:
 
    ```text
-   Read AI-FIXES.md in D:\tools\bixi and follow it for the project named
+   Read AI-FIXES.md in C:\tools\bixi and follow it for the project named
    "MyProject": fix every rejected file, using its rejection note as the
    instruction. Don't commit or run any state-changing svn commands —
    I'll re-review and commit in Bixi.
@@ -68,7 +68,7 @@ is so a mass review can end as a hand-off to an AI coding assistant:
 
 ```bash
 # 1. Get the code
-git clone https://github.com/<your-org>/bixi.git
+git clone https://github.com/Noguska/bixi.git
 cd bixi
 
 # 2. Run it (app mode — built-in PHP server, recommended)
@@ -83,7 +83,7 @@ It serves at <http://127.0.0.1:8787/> and opens your browser. In the app:
 1. **Sign in to SVN** (top-right) — one username/password used for repo access,
    stored under `data/` on this machine only.
 2. **Add a project** — a name and the path to your working copy
-   (e.g. `D:\htdocs\myproject` or `/home/me/projects/app`).
+   (e.g. `C:\projects\myproject` or `/home/me/projects/app`).
 3. Click the project and start reviewing.
 
 Full setup, hosting under Apache/nginx, external diff-tool configuration, and
@@ -113,6 +113,7 @@ renders the file list with a windowed (virtualized) DOM.
 
 ```
 index.php          UI shell (rendered client-side)
+history.php        Standalone commit-history window (read-only)
 api.php            JSON API endpoints (?action=...)
 lib/svn.php        SVN CLI wrapper + XML status / unified-diff parsers
 lib/desktop.php    Cross-platform desktop launching (diff tool / open / reveal)
@@ -121,7 +122,7 @@ lib/util.php       Shared helpers
 run.cmd / run.sh   App-mode launchers (serve via `php -S`)
 assets/app.js      Frontend (state, virtual list, diff renderer)
 assets/app.css     Styles
-assets/vendor/     Vendored highlight.js + Inter font (offline)
+assets/vendor/     Vendored highlight.js + fonts (Inter, IBM Plex — offline)
 data/              Per-install state (git-ignored; created on first run)
 ```
 
@@ -149,14 +150,14 @@ including inside a commercial company — but you may **not sell it** (nor sell 
 hosting/support service whose value is substantially the software itself), as
 defined by the Commons Clause. That single restriction is the whole point: the
 code is open for everyone to use and build on, but nobody can take it and resell
-it. All other rights are reserved by Noguska Inc..
+it. All other rights are reserved by Noguska Inc.
 
 > Note: because it restricts resale, this is technically **source-available**
 > rather than OSI-approved "open source" — the two behave identically for normal
 > use; the label just reflects that one no-reselling clause.
 
-Bundled third-party components (highlight.js, the Inter typeface) are distributed
-under their own licenses; see [NOTICE](NOTICE).
+Bundled third-party components (highlight.js, the Inter and IBM Plex typefaces)
+are distributed under their own licenses; see [NOTICE](NOTICE).
 
 ## Disclaimer
 
