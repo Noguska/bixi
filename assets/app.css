@@ -197,7 +197,8 @@ textarea { resize: vertical; font-family: var(--mono); font-size: 12px; }
   z-index: 0; pointer-events: none; opacity: .95;
 }
 .dashboard { position: relative; z-index: 1; max-width: 760px; margin: 48px auto; padding: 0 24px; width: 100%; overflow-y: auto; }
-.dashboard h1 { font-size: 20px; font-weight: 700; margin: 0 0 4px; }
+.dash-head { display: flex; align-items: center; justify-content: space-between; margin: 0 0 4px; }
+.dashboard h1 { font-size: 20px; font-weight: 700; margin: 0; }
 .dashboard .sub { color: var(--muted); font-size: 12.5px; margin-bottom: 24px; }
 .proj-card {
   display: flex; align-items: center; gap: 14px; padding: 14px 16px; margin-bottom: 8px;

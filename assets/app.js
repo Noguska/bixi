@@ -410,7 +410,10 @@ function renderDashboard(app) {
     <div class="dash-bg" aria-hidden="true"></div>
     <div class="dash-moon" title="${moonPhaseName(moonPhaseFraction(new Date()))}" aria-hidden="true">${moonSvg()}</div>
     <div class="dashboard">
-      <h1>Projects</h1>
+      <div class="dash-head">
+        <h1>Projects</h1>
+        ${state.projects.length ? `<button class="btn sm" id="btn-update-all" title="Run svn update on every project, one at a time">${icon('update')} Update All</button>` : ''}
+      </div>
       <div class="sub">SVN working copies registered for review. Click one to open it.</div>
       <div id="proj-list"></div>
       <div class="proj-add">
@@ -457,8 +460,11 @@ function renderDashboard(app) {
         <button class="btn sm ghost danger" data-del="${p.id}">Remove</button>
         <div class="proj-update" data-upd="${p.id}"><button class="btn sm" disabled><span class="spinner"></span> Update</button></div>
       </div>`).join('');
-    // Kick off an independent update check per project (ajax, non-blocking).
+    // Kick off an update check per project (queued one-at-a-time inside
+    // checkProjectUpdate; every card shows its spinner immediately).
     state.projects.forEach(p => checkProjectUpdate(p.id));
+    const updAll = $('#btn-update-all', app);
+    if (updAll) updAll.onclick = updateAllProjects;
   }
 
   list.onclick = e => {
@@ -595,8 +601,20 @@ function setProjectUpdateSlot(id, html) {
 // Ajax check whether the repo is ahead of this working copy. The Update button
 // stays disabled (greyed) while loading, then becomes an active primary button
 // if an update is available, or shows a disabled "Up to date" state otherwise.
-async function checkProjectUpdate(id) {
+//
+// Checks run through a one-at-a-time queue: the app is normally served by PHP's
+// built-in server, which handles a single request at a time (its worker pool is
+// fork-based — unavailable on Windows). Firing every project's check concurrently
+// made them queue server-side while each one's 20s client timer kept ticking, so
+// every project behind one slow check falsely reported "Unreachable". Queuing
+// client-side scopes each timeout to its own request.
+let updCheckQueue = Promise.resolve();
+function checkProjectUpdate(id) {
   setProjectUpdateSlot(id, `<button class="btn sm" disabled><span class="spinner"></span> Update</button>`);
+  return updCheckQueue = updCheckQueue.then(() => checkProjectUpdateNow(id));
+}
+
+async function checkProjectUpdateNow(id) {   // never rejects, so the queue chain can't break
   try {
     // Client-side backstop over the server's own 15s svn timeout, so the spinner
     // clears even if the request itself stalls (VPN down / IP-firewalled repo).
@@ -630,6 +648,29 @@ async function runProjectUpdate(id) {
     toast(err.message, 'err');
   }
   await checkProjectUpdate(id);
+}
+
+// Update All: `svn update` every registered project, strictly one at a time —
+// updates are state-changing, and the single-worker server would serialize them
+// anyway, so sequential is both the safe and the honest ordering. Each card
+// re-checks right after its update; one summary toast at the end (per-project
+// success toasts would stack up).
+async function updateAllProjects() {
+  const btn = document.querySelector('#btn-update-all');
+  if (btn) { btn.disabled = true; btn.innerHTML = `<span class="spinner"></span> Updating All…`; }
+  state.projects.forEach(p => setProjectUpdateSlot(p.id,
+    `<button class="btn sm" disabled><span class="spinner"></span> Queued…</button>`));
+  let done = 0;
+  const failures = [];
+  for (const p of state.projects) {
+    setProjectUpdateSlot(p.id, `<button class="btn sm" disabled><span class="spinner"></span> Updating…</button>`);
+    try { await api('update', { id: p.id }); done++; }
+    catch (err) { failures.push(`${p.name}: ${err.message}`); }
+    await checkProjectUpdate(p.id);
+  }
+  if (btn) { btn.disabled = false; btn.innerHTML = `${icon('update')} Update All`; }
+  if (failures.length) toast(`Updated ${done} of ${state.projects.length} — failed: ${failures.join(' · ')}`, 'err');
+  else toast(done === 1 ? 'Project updated.' : `All ${done} projects updated.`, 'ok');
 }
 
 // ------------------------------------------------ master password / SVN account
