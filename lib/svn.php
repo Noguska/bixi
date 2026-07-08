@@ -620,7 +620,13 @@ function svn_diff(string $projectPath, string $rel, string $status): array {
         return ['binary' => false, 'lang' => $lang, 'hunks' => $lines ? [$hunk] : []];
     }
 
-    $r = svn_run(['diff', '--internal-diff', '--', $rel], $projectPath);
+    // For a directory row, only its own changes (property edits) belong in the
+    // panel — children have their own rows. --depth empty stops the recursion.
+    $args = ['diff', '--internal-diff'];
+    if (is_dir($abs)) { $args[] = '--depth'; $args[] = 'empty'; }
+    $args[] = '--';
+    $args[] = $rel;
+    $r = svn_run($args, $projectPath);
     if ($r['code'] !== 0) fail('svn diff failed: ' . trim($r['err']), 500);
     $out = $r['out'];
 
