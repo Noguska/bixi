@@ -513,12 +513,22 @@ function svn_diff_rev(string $projectPath, string $target, int $rev): array {
     $flush = function () use (&$files, &$cur, &$buf) {
         if ($cur === null) return;
         $text = implode("\n", $buf);
+        // Split off the "Property changes on:" tail so its +/- value lines
+        // can't bleed into the last text hunk.
+        $props = [];
+        if (preg_match('/^Property changes on: /m', $text, $m, PREG_OFFSET_CAPTURE)) {
+            $props = parse_prop_diff(substr($text, $m[0][1]));
+            // Drop the blank separator line(s) svn emits before the property
+            // section so they don't render as phantom context lines.
+            $text = rtrim(substr($text, 0, $m[0][1]), "\r\n");
+        }
         $binary = strpos($text, 'Cannot display: file marked as a binary type') !== false;
         $files[] = [
             'file' => $cur,
             'binary' => $binary,
             'lang' => guess_lang($cur),
             'hunks' => $binary ? [] : parse_unified_diff($text),
+            'props' => $props,
         ];
     };
     foreach (explode("\n", $r['out']) as $line) {
@@ -672,6 +682,33 @@ function parse_prop_changes(string $text): array {
 }
 
 /** Parse unified diff text into hunks of typed lines. */
+/**
+ * Parse the "Property changes on:" tail of an svn diff block into
+ * [['name' => 'svn:ignore', 'action' => 'Modified', 'lines' => [['t','s'],...]], ...].
+ * Property hunks use "## ... ##" headers; value lines carry the usual
+ * ' '/'+'/'-' prefixes (svn:mergeinfo instead emits "   Merged ..." summary lines,
+ * which are kept verbatim as context).
+ */
+function parse_prop_diff(string $text): array {
+    $props = [];
+    $cur = null;
+    foreach (preg_split('/\r\n|\r|\n/', $text) as $line) {
+        if (preg_match('/^(Added|Modified|Deleted): (.+)$/', $line, $m)) {
+            if ($cur) $props[] = $cur;
+            $cur = ['name' => trim($m[2]), 'action' => $m[1], 'lines' => []];
+            continue;
+        }
+        if ($cur === null || $line === '' || str_starts_with($line, '##')
+            || str_starts_with($line, '___') || $line === '\\ No newline at end of property') continue;
+        $t = $line[0];
+        $cur['lines'][] = ($t === '+' || $t === '-' || $t === ' ')
+            ? ['t' => $t, 's' => substr($line, 1)]
+            : ['t' => ' ', 's' => $line];
+    }
+    if ($cur) $props[] = $cur;
+    return $props;
+}
+
 function parse_unified_diff(string $diff): array {
     $hunks = [];
     $hunk = null;
