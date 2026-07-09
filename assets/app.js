@@ -1168,7 +1168,9 @@ function filteredFiles() {
   const kf = state.kindFilter;
   return state.files.filter(f => {
     if (dir && f.path !== dir && !f.path.startsWith(prefix)) return false;
-    if (sf.size && !sf.has(f.status)) return false;
+    // 'ignored' / 'unmodified' aren't status chips — their visibility is the
+    // fetch toggle itself, so the chip filter never applies to them.
+    if (sf.size && f.status !== 'ignored' && f.status !== 'unmodified' && !sf.has(f.status)) return false;
     if (rf === 'approved' && f.review !== 'approved') return false;
     if (rf === 'unapproved' && f.review === 'approved') return false;
     if (kf === 'files' && f.isDir) return false;
