@@ -2475,32 +2475,42 @@ function renderToolbar() {
   const colors = STATUS_COLORS;
   const rf = state.reviewFilter;
   const kf = state.kindFilter;
+  // 'all' is a derived display label over the whole first group: every status chip
+  // on, both fetch toggles on, and no review/kind filtering. Any chip click below
+  // re-renders the toolbar, which re-evaluates this.
+  const allOn = present.every(s => state.statusFilter.has(s))
+    && state.showUnmodified && state.showIgnored && rf === '' && kf === '';
   el.innerHTML = `
     <span class="f-search-wrap">
       <input type="text" id="f-search" placeholder="Filter paths… (* wildcard)" value="${esc(state.search)}" title="Substring match, or use * / ? wildcards (e.g. *Controller.php, src/*, ??.js)">
       <button type="button" id="f-search-clear" class="f-search-clear ${state.search ? '' : 'hidden'}" title="Clear filter" aria-label="Clear filter"><span class="x">×</span></button>
     </span>
+    <span class="chip ${allOn ? 'on' : ''}" data-chip-all title="Show everything — every status plus unmodified and ignored files (full-tree scan, slower), with no other filtering">
+      <span class="dot" style="background:var(--gold)"></span>all
+    </span>
     ${present.map(s => `
       <span class="chip ${state.statusFilter.has(s) ? 'on' : ''}" data-chip="${s}">
         <span class="dot" style="background:${colors[s] || 'var(--muted)'}"></span>${s}
       </span>`).join('')}
-    <span class="chip ${rf === 'approved' ? 'on' : ''}" data-review="approved">
-      <span class="dot" style="background:var(--green)"></span>approved
+    <span class="chip ${state.showUnmodified ? 'on' : ''}" data-toggle="unmodified" title="Also list unchanged (committed) files — runs a full-tree scan, slower">
+      <span class="dot" style="background:var(--muted)"></span>unmodified
     </span>
-    <span class="chip ${rf === 'unapproved' ? 'on' : ''}" data-review="unapproved">
-      <span class="dot" style="background:var(--muted)"></span>unapproved
+    <span class="chip ${state.showIgnored ? 'on' : ''}" data-toggle="ignored" title="Show svn-ignored items (so they can be unhidden)">
+      <span class="dot" style="background:var(--muted)"></span>ignored
     </span>
+    <span class="chip-sep"></span>
     <span class="chip ${kf === 'files' ? 'on' : ''}" data-kind="files" title="Show only files">
       <span class="dot" style="background:var(--blue)"></span>files
     </span>
     <span class="chip ${kf === 'folders' ? 'on' : ''}" data-kind="folders" title="Show only folders">
       <span class="dot" style="background:var(--gold)"></span>folders
     </span>
-    <span class="chip ${state.showUnmodified ? 'on' : ''}" data-toggle="unmodified" title="Also list unchanged (committed) files — runs a full-tree scan, slower">
-      <span class="dot" style="background:var(--muted)"></span>unmodified
+    <span class="chip-sep"></span>
+    <span class="chip ${rf === 'approved' ? 'on' : ''}" data-review="approved">
+      <span class="dot" style="background:var(--green)"></span>approved
     </span>
-    <span class="chip ${state.showIgnored ? 'on' : ''}" data-toggle="ignored" title="Show svn-ignored items (so they can be unhidden)">
-      <span class="dot" style="background:var(--muted)"></span>ignored
+    <span class="chip ${rf === 'unapproved' ? 'on' : ''}" data-review="unapproved">
+      <span class="dot" style="background:var(--muted)"></span>unapproved
     </span>
     <span class="file-stats" id="file-stats"></span>
     <span class="file-nav">
@@ -2525,6 +2535,19 @@ function renderToolbar() {
     refreshList();
   };
   el.onclick = e => {
+    if (e.target.closest('[data-chip-all]')) {
+      // 'all' drives the other filters (idempotent — it isn't a toggle): every
+      // status chip on, both fetch toggles on, review/kind filtering cleared.
+      // Enabling a fetch toggle requires a server refresh.
+      present.forEach(s => state.statusFilter.add(s));
+      state.reviewFilter = '';
+      state.kindFilter = '';
+      const needFetch = !state.showUnmodified || !state.showIgnored;
+      state.showUnmodified = state.showIgnored = true;
+      renderToolbar();
+      needFetch ? refreshStatus() : refreshList();
+      return;
+    }
     const chip = e.target.closest('[data-chip]');
     if (chip) {
       const s = chip.dataset.chip;
