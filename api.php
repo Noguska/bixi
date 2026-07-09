@@ -268,10 +268,6 @@ switch ($action) {
             $f['review'] = $entry ? $entry['status'] : null;
             $f['notes'] = $entry['notes'] ?? null;
         }
-        $commitStats = commit_stats($project['id'], $project['path'], $rootRevision);
-        // Performance-bar scale: the bar is full (green) at a 1/divisor commit share.
-        // Unset or <=1 means "don't show the bar" (the client hides it).
-        $commitStats['divisor'] = (int) config_get('work_performance_divisor', 0);
 
         json_out([
             'ok' => true,
@@ -279,9 +275,24 @@ switch ($action) {
             'rootRevision' => $rootRevision,
             'files' => $files,
             'pruned' => $pruned,
-            'commitStats' => $commitStats,
             'generated' => gmdate('c'),
         ]);
+    }
+
+    // ------------------------------------------------- commit stats (async)
+
+    case 'commit_stats': {
+        // Perf-bar data, split out of `status` because a stale cache makes it run
+        // `svn log` against the repository — the only network call in the project
+        // load. Fetched out of band so a slow/unreachable repo host can never
+        // block the file list or the directory tree.
+        $project = project_get(req_str('id'));
+        $rootRevision = (int)svn_info($project['path'])['revision'];
+        $stats = commit_stats($project['id'], $project['path'], $rootRevision);
+        // Performance-bar scale: the bar is full (green) at a 1/divisor commit share.
+        // Unset or <=1 means "don't show the bar" (the client hides it).
+        $stats['divisor'] = (int) config_get('work_performance_divisor', 0);
+        json_out(['ok' => true, 'commitStats' => $stats]);
     }
 
     // ----------------------------------------------------- directory tree (async)

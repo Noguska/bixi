@@ -93,7 +93,7 @@ async function runFileOp(path, fn) {
 // These get an AbortController — the status bar shows an × for them, and callers
 // may pass opts.timeoutMs for an automatic client-side abort.
 const ABORTABLE_ACTIONS = new Set([
-  'projects', 'status', 'dirs', 'diff', 'update_check', 'log', 'revdiff',
+  'projects', 'status', 'dirs', 'commit_stats', 'diff', 'update_check', 'log', 'revdiff',
   'eol_info', 'eol_scan', 'props_get', 'get_ignore',
   'merge_list', 'merge_log', 'merge_eligible', 'merge_preview',
   'master_status', 'settings_get',
@@ -154,7 +154,7 @@ async function api(action, params = {}, opts = {}) {
 // — and since the PHP side runs the svn CLI synchronously within the request, a
 // label like "Committing…" stays up for the whole svn/TortoiseSVN operation.
 const OP_LABELS = {
-  status: 'Refreshing status…', dirs: 'Loading folders…', diff: 'Loading diff…',
+  status: 'Refreshing status…', dirs: 'Loading folders…', commit_stats: 'Loading commit stats…', diff: 'Loading diff…',
   eol_info: 'Checking line endings…', eol_scan: 'Scanning line endings…', eol_fix: 'Fixing line endings…',
   commit: 'Committing…', revert: 'Reverting…', update: 'Updating from SVN…', update_check: 'Checking for updates…',
   add: 'Adding to SVN…', delete: 'Deleting…', move: 'Moving…', cleanup: 'Running svn cleanup…', review: 'Saving review…',
@@ -1034,13 +1034,18 @@ async function openProject(id) {
   state.expandedDirs = new Set(['']);
   state.selPath = null;
   state.diff = null;
+  state.commitStats = null;   // cleared so another project's perf bar never flashes
   state.loading = true;
   location.hash = 'p=' + id;
   render();
-  await refreshStatus();
+  // Quick loads first: the directory tree (filesystem walk) and commit stats fill
+  // in without waiting on the svn status round-trip, which can be much slower.
+  loadDirs();
+  loadCommitStats();
+  await refreshStatus({ sideLoads: false });
 }
 
-async function refreshStatus() {
+async function refreshStatus({ sideLoads = true } = {}) {
   state.loading = true;
   renderStats();
   renderCommitBar();   // reflect the loading lock immediately
@@ -1050,7 +1055,6 @@ async function refreshStatus() {
     state.rootRevision = data.rootRevision ?? null;
     state.files = data.files;
     state.eol.clear();   // EOL is lazy per-file; stale after a refresh
-    state.commitStats = data.commitStats ?? null;
     if (state.selPath && !state.files.some(f => f.path === state.selPath)) {
       state.selPath = null; state.diff = null;
     }
@@ -1067,7 +1071,9 @@ async function refreshStatus() {
   // Re-pull the diff for the file that's still open so the panel reflects the
   // current working copy (e.g. after an external edit or an svn operation).
   if (state.selPath && state.files.some(f => f.path === state.selPath)) loadDiff(state.selPath);
-  loadDirs();   // fetch the full directory tree separately so it never blocks this render
+  // Fetch the directory tree and commit stats separately so they never block this
+  // render (openProject fires them itself, ahead of the status call).
+  if (sideLoads) { loadDirs(); loadCommitStats(); }
 }
 
 // Load every working-copy directory (for change-free folders in the tree) out of
@@ -1087,6 +1093,23 @@ async function loadDirs() {
     state.dirs = data.dirs ?? [];
     renderTree();
   } catch { /* tree still works from the pending-file dirs */ }
+}
+
+// Perf-bar commit stats, out of band: a stale cache makes the server run `svn log`
+// against the repository — the only network call in a project load — so it must
+// never sit in front of the status render. Token-guarded like loadDirs.
+let statsToken = 0;
+async function loadCommitStats() {
+  const token = ++statsToken;
+  const projectId = state.project?.id;
+  if (!projectId) return;
+  try {
+    const data = await api('commit_stats', { id: projectId });
+    if (token !== statsToken || state.project?.id !== projectId) return;   // superseded
+    state.commitStats = data.commitStats ?? null;
+    const slot = $('#perfbar-slot');
+    if (slot) slot.innerHTML = perfBarHtml();
+  } catch { /* the bar just stays hidden/stale — never worth surfacing */ }
 }
 
 // Directory tree built from every working-copy directory (so change-free folders
@@ -1253,7 +1276,7 @@ function renderProject(app) {
       <div class="crumb">/ <b>${esc(state.project.name)}</b></div>
       <span class="wc-path">${esc(state.project.path)}</span>
       <div class="spacer"></div>
-      ${perfBarHtml()}
+      <span id="perfbar-slot" style="display:contents">${perfBarHtml()}</span>
       <button class="btn sm" id="btn-merge" title="Merge changes from another branch">${icon('merge')} Merge…</button>
       <button class="btn sm" id="btn-update" title="Update working copy from SVN (svn update)">${icon('update')} Update</button>
       <button class="btn sm" id="btn-history" title="Show revision history for this working copy">${icon('history')} History</button>
